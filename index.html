@@ -17,6 +17,8 @@
       --shell-tab-bg: rgba(255,255,255,.055);
       --shell-tab-active: rgba(69,211,189,.16);
       --shell-shadow: 0 14px 34px rgba(0,0,0,.34);
+      --shell-tabs-height: 52px;
+      --shell-review-sidebar-width: 0px;
       font-family: "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif;
     }
 
@@ -36,7 +38,7 @@
 
     body {
       display: grid;
-      grid-template-rows: 52px minmax(0, 1fr);
+      grid-template-rows: var(--shell-tabs-height) minmax(0, 1fr);
     }
 
     .cockpit-tabs-bar {
@@ -47,7 +49,7 @@
       align-items: center;
       justify-content: center;
       min-width: 0;
-      height: 52px;
+      height: var(--shell-tabs-height);
       padding: 8px 14px;
       border-bottom: 1px solid var(--shell-line);
       background: rgba(8, 11, 16, .88);
@@ -116,6 +118,33 @@
       background: #05070b;
     }
 
+    body.shell-review-sidebar-open {
+      display: block;
+    }
+
+    body.shell-review-sidebar-open .cockpit-tabs-bar {
+      position: fixed;
+      left: 0;
+      right: var(--shell-review-sidebar-width);
+      z-index: 20;
+      justify-content: center;
+      background: linear-gradient(90deg, rgba(8, 11, 16, .9) 0%, rgba(8, 11, 16, .88) 74%, rgba(8, 11, 16, 0) 100%);
+      transition: right .16s ease;
+    }
+
+    body.shell-review-sidebar-open .cockpit-tabs {
+      width: auto;
+      max-width: max(0px, calc(100vw - var(--shell-review-sidebar-width) - 28px));
+    }
+
+    body.shell-review-sidebar-open .cockpit-panels {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      width: 100vw;
+      height: 100vh;
+    }
+
     .cockpit-panel {
       position: absolute;
       inset: 0;
@@ -145,7 +174,7 @@
     }
 
     @media (max-width: 720px) {
-      body { grid-template-rows: 60px minmax(0, 1fr); }
+      body { --shell-tabs-height: 60px; }
 
       .cockpit-tabs-bar {
         height: 60px;
@@ -199,6 +228,12 @@
 
     const tabs = Array.from(document.querySelectorAll('[data-cockpit-tab]'));
     const panels = Array.from(document.querySelectorAll('[data-cockpit-panel]'));
+    const frames = Array.from(document.querySelectorAll('[data-cockpit-frame]'));
+    const reviewTopOffsetStyleId = 'shell-review-top-offset-style';
+    let reviewSidebarClassObserver = null;
+    let reviewSidebarResizeObserver = null;
+    let reviewSidebarWindow = null;
+    let reviewTopOffsetMutationSuppressed = false;
 
     function setActiveTab(id, focusTab = true) {
       tabs.forEach((tab) => {
@@ -215,6 +250,121 @@
       if (focusTab) {
         document.querySelector('[data-cockpit-tab="' + id + '"]')?.focus({ preventScroll: true });
       }
+      requestAnimationFrame(bindActiveReviewSidebarShell);
+    }
+
+    function activeFrame() {
+      const activePanel = panels.find((panel) => !panel.hidden);
+      return activePanel ? activePanel.querySelector('[data-cockpit-frame]') : null;
+    }
+
+    function shellTabsHeight() {
+      const tabsBar = document.querySelector('.cockpit-tabs-bar');
+      return Math.round(tabsBar?.getBoundingClientRect().height || 52);
+    }
+
+    function ensureReviewTopOffsetStyle(doc) {
+      if (!doc || doc.getElementById(reviewTopOffsetStyleId)) return;
+      const style = doc.createElement('style');
+      style.id = reviewTopOffsetStyleId;
+      style.textContent = `
+        body.shell-review-tabs-offset .cockpit {
+          padding-top: calc(var(--shell-review-base-cockpit-padding-top, 0px) + var(--shell-review-tabs-height, 52px)) !important;
+        }
+      `;
+      doc.head.appendChild(style);
+    }
+
+    function syncFrameReviewTopOffset(frame, enabled) {
+      try {
+        const doc = frame && (frame.contentDocument || frame.contentWindow?.document);
+        const body = doc && doc.body;
+        const cockpit = doc && doc.querySelector('.cockpit');
+        if (!doc || !body || !cockpit) return;
+        ensureReviewTopOffsetStyle(doc);
+        reviewTopOffsetMutationSuppressed = true;
+        body.classList.remove('shell-review-tabs-offset');
+        body.style.setProperty('--shell-review-tabs-height', `${shellTabsHeight()}px`);
+        body.style.setProperty('--shell-review-base-cockpit-padding-top', frame.contentWindow.getComputedStyle(cockpit).paddingTop);
+        body.classList.toggle('shell-review-tabs-offset', Boolean(enabled));
+        setTimeout(() => {
+          reviewTopOffsetMutationSuppressed = false;
+        }, 0);
+      } catch (error) {}
+    }
+
+    function syncReviewSidebarShell(frame = activeFrame()) {
+      let isSidebarOpen = false;
+      let sidebarWidth = 0;
+      try {
+        const doc = frame && (frame.contentDocument || frame.contentWindow?.document);
+        const body = doc && doc.body;
+        const panel = doc && doc.querySelector('[data-review-brief-panel]');
+        isSidebarOpen = Boolean(
+          body &&
+          panel &&
+          body.classList.contains('review-brief-sidebar') &&
+          body.classList.contains('review-mode-review') &&
+          !body.classList.contains('review-brief-collapsed')
+        );
+        if (isSidebarOpen) {
+          sidebarWidth = Math.round(panel.getBoundingClientRect().width) || 460;
+        }
+      } catch (error) {
+        isSidebarOpen = false;
+      }
+      document.body.classList.toggle('shell-review-sidebar-open', isSidebarOpen);
+      document.documentElement.style.setProperty(
+        '--shell-review-sidebar-width',
+        isSidebarOpen ? sidebarWidth + 'px' : '0px'
+      );
+      frames.forEach((item) => syncFrameReviewTopOffset(item, item === frame && isSidebarOpen));
+    }
+
+    function clearReviewSidebarShellWatchers() {
+      if (reviewSidebarClassObserver) reviewSidebarClassObserver.disconnect();
+      if (reviewSidebarResizeObserver) reviewSidebarResizeObserver.disconnect();
+      if (reviewSidebarWindow) reviewSidebarWindow.removeEventListener('resize', handleFrameResize);
+      reviewSidebarClassObserver = null;
+      reviewSidebarResizeObserver = null;
+      reviewSidebarWindow = null;
+    }
+
+    function handleFrameResize() {
+      syncReviewSidebarShell();
+    }
+
+    function bindActiveReviewSidebarShell() {
+      const frame = activeFrame();
+      clearReviewSidebarShellWatchers();
+      if (!frame) {
+        syncReviewSidebarShell(null);
+        return;
+      }
+      try {
+        const doc = frame.contentDocument || frame.contentWindow?.document;
+        if (!doc || !doc.body) {
+          syncReviewSidebarShell(frame);
+          return;
+        }
+        reviewSidebarClassObserver = new MutationObserver(() => {
+          if (!reviewTopOffsetMutationSuppressed) syncReviewSidebarShell(frame);
+        });
+        reviewSidebarClassObserver.observe(doc.body, {
+          attributes: true,
+          attributeFilter: ['class']
+        });
+        const panel = doc.querySelector('[data-review-brief-panel]');
+        if (panel && 'ResizeObserver' in window) {
+          reviewSidebarResizeObserver = new ResizeObserver(() => syncReviewSidebarShell(frame));
+          reviewSidebarResizeObserver.observe(panel);
+        }
+        reviewSidebarWindow = frame.contentWindow;
+        if (reviewSidebarWindow) reviewSidebarWindow.addEventListener('resize', handleFrameResize);
+        syncReviewSidebarShell(frame);
+      } catch (error) {
+        syncReviewSidebarShell(null);
+      }
     }
 
     function loadFrame(id, pageId = id) {
@@ -230,6 +380,7 @@
       const pageId = options.pageId || id;
       setActiveTab(id, options.focus !== false);
       loadFrame(id, pageId);
+      requestAnimationFrame(bindActiveReviewSidebarShell);
     }
 
     function pageIdFromNavigation(data) {
@@ -259,6 +410,13 @@
     }
 
     window.addEventListener('message', handleEmbeddedNavigation);
+    window.addEventListener('resize', () => syncReviewSidebarShell());
+
+    frames.forEach((frame) => {
+      frame.addEventListener('load', () => {
+        if (frame === activeFrame()) bindActiveReviewSidebarShell();
+      });
+    });
 
     tabs.forEach((tab, index) => {
       tab.addEventListener('click', () => selectTab(tab.dataset.cockpitTab));
