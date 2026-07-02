@@ -50,6 +50,9 @@
     const PIN_LABEL_MODE = (CONFIG.pinLabel || 'number').trim();
     const NICK_KEY = 'pc::nickname';
     const VIEW_KEY = 'pc::view'; // 'page' | 'project'
+    const LOCAL_STORAGE_SCOPE = PROJECT_KEY || 'default';
+    const LOCAL_PINS_KEY = `pc::localPins::${LOCAL_STORAGE_SCOPE}`;
+    const LOCAL_COMMENTS_KEY = `pc::localComments::${LOCAL_STORAGE_SCOPE}`;
 
     function normalizeNick(value) {
         return String(value || '').trim().slice(0, 40);
@@ -147,6 +150,150 @@
         };
     }
 
+    function safeReadJson(key, fallback) {
+        try {
+            const raw = localStorage.getItem(key);
+            return raw ? JSON.parse(raw) : fallback;
+        } catch (error) {
+            console.warn('[pin-comments] local fallback read failed', error);
+            return fallback;
+        }
+    }
+
+    function normalizeComment(comment) {
+        return {
+            id: String(comment.id || uid()),
+            author: normalizeNick(comment.author) || '评审人',
+            body: String(comment.body || ''),
+            ts: comment.ts || comment.created_at || new Date().toISOString()
+        };
+    }
+
+    function normalizeLocalPin(pin) {
+        const pageKey = String(pin.pageKey || pin.page_key || PAGE_KEY);
+        return {
+            id: String(pin.id || uid()),
+            pageKey,
+            pageTitle: String(pin.pageTitle || pin.page_title || pageKey),
+            selector: String(pin.selector || 'body'),
+            xPct: Number.isFinite(Number(pin.xPct)) ? Number(pin.xPct) : 0.5,
+            yPct: Number.isFinite(Number(pin.yPct)) ? Number(pin.yPct) : 0.5,
+            isFixed: Boolean(pin.isFixed),
+            status: STATUS[pin.status] ? pin.status : 'todo',
+            createdAt: pin.createdAt || pin.created_at || new Date().toISOString(),
+            createdBy: normalizeNick(pin.createdBy || pin.created_by) || '评审人',
+            comments: Array.isArray(pin.comments) ? pin.comments.map(normalizeComment) : [],
+            localOnly: true
+        };
+    }
+
+    function readLocalPins() {
+        return safeReadJson(LOCAL_PINS_KEY, []).map(normalizeLocalPin);
+    }
+
+    function writeLocalPins(nextPins) {
+        localPins = nextPins.map(normalizeLocalPin);
+        localStorage.setItem(LOCAL_PINS_KEY, JSON.stringify(localPins));
+    }
+
+    function readLocalComments() {
+        return safeReadJson(LOCAL_COMMENTS_KEY, []).map(comment => ({
+            pinId: String(comment.pinId || ''),
+            pageKey: String(comment.pageKey || PAGE_KEY),
+            ...normalizeComment(comment)
+        })).filter(comment => comment.pinId);
+    }
+
+    function writeLocalComments(nextComments) {
+        localComments = nextComments.map(comment => ({
+            pinId: String(comment.pinId),
+            pageKey: String(comment.pageKey || PAGE_KEY),
+            ...normalizeComment(comment)
+        }));
+        localStorage.setItem(LOCAL_COMMENTS_KEY, JSON.stringify(localComments));
+    }
+
+    function mergeLocalState(cloudPins) {
+        localPins = readLocalPins();
+        localComments = readLocalComments();
+        const merged = (cloudPins || []).map(pin => {
+            const comments = pin.comments.slice();
+            localComments
+                .filter(comment => comment.pinId === pin.id && !comments.some(existing => existing.id === comment.id))
+                .forEach(comment => comments.push(normalizeComment(comment)));
+            comments.sort((a, b) => new Date(a.ts) - new Date(b.ts));
+            return { ...pin, comments };
+        });
+        localPins.forEach(localPin => {
+            if (!merged.some(pin => pin.id === localPin.id)) merged.push(localPin);
+        });
+        return merged;
+    }
+
+    function saveLocalDraftPin(pin, body) {
+        const now = new Date().toISOString();
+        const localPin = normalizeLocalPin({
+            ...pin,
+            id: pin.id || uid(),
+            pageKey: PAGE_KEY,
+            pageTitle: PAGE_TITLE,
+            createdAt: pin.createdAt || now,
+            createdBy: pin.createdBy || getNick() || '评审人',
+            comments: [{
+                id: uid(),
+                author: getNick() || '评审人',
+                body,
+                ts: now
+            }]
+        });
+        writeLocalPins(localPins.filter(existing => existing.id !== localPin.id).concat(localPin));
+        pins = mergeLocalState(pins.filter(existing => existing.id !== localPin.id));
+        return localPin;
+    }
+
+    function saveLocalComment(pinId, body) {
+        const now = new Date().toISOString();
+        const msg = normalizeComment({
+            id: uid(),
+            author: getNick() || '评审人',
+            body,
+            ts: now
+        });
+        const localPin = localPins.find(pin => pin.id === pinId);
+        if (localPin) {
+            localPin.comments.push(msg);
+            writeLocalPins(localPins);
+        } else {
+            const sourcePin = pins.find(pin => pin.id === pinId);
+            writeLocalComments(localComments.concat({
+                ...msg,
+                pinId,
+                pageKey: sourcePin ? sourcePin.pageKey : PAGE_KEY
+            }));
+        }
+        pins = mergeLocalState(pins);
+        return msg;
+    }
+
+    function removeLocalPin(pinId) {
+        const exists = localPins.some(pin => pin.id === pinId);
+        if (!exists) return false;
+        writeLocalPins(localPins.filter(pin => pin.id !== pinId));
+        writeLocalComments(localComments.filter(comment => comment.pinId !== pinId));
+        pins = mergeLocalState(pins.filter(pin => pin.id !== pinId));
+        return true;
+    }
+
+    function updateLocalPinStatus(pinId, status) {
+        const next = localPins.map(pin => pin.id === pinId ? { ...pin, status } : pin);
+        const changed = next.some((pin, index) => pin.status !== localPins[index]?.status);
+        if (changed) {
+            writeLocalPins(next);
+            pins = mergeLocalState(pins.map(pin => pin.id === pinId ? { ...pin, status } : pin));
+        }
+        return changed;
+    }
+
     // 拉取整个 projectKey 下所有页面的 pin（v0.4 起改为项目级）
     // selector 只在当前页有效，所以画布只画 PAGE_KEY 的 pin；抽屉里全量展示。
     async function fetchPins() {
@@ -164,15 +311,19 @@
 
     async function refreshFromCloud(quiet) {
         if (!isCloudReady()) {
-            if (!quiet) showToast('未连接 Supabase，多人评论不可用');
+            pins = mergeLocalState([]);
+            refreshAllUi();
+            if (!quiet) showToast('未连接 Supabase，评论已使用本机保存');
             return;
         }
         try {
-            pins = await fetchPins();
+            pins = mergeLocalState(await fetchPins());
             refreshAllUi();
         } catch (err) {
             console.error('[pin-comments] load failed', err);
-            if (!quiet) showToast('评论同步失败，请检查 Supabase 配置');
+            pins = mergeLocalState([]);
+            refreshAllUi();
+            if (!quiet) showToast('评论同步失败，已显示本机评论');
         }
     }
 
@@ -243,6 +394,7 @@
     }
 
     async function updatePinStatus(pinId, status) {
+        if (updateLocalPinStatus(pinId, status)) return;
         const { error } = await supabaseClient
             .from('comment_pins')
             .update({ status })
@@ -252,6 +404,7 @@
     }
 
     async function deletePin(pinId) {
+        if (removeLocalPin(pinId)) return;
         const { error } = await supabaseClient
             .from('comment_pins')
             .delete()
@@ -275,7 +428,9 @@
     }
 
     // ============= 状态 =============
-    let pins = []; // 整个 projectKey 下所有页面的 pin
+    let localPins = readLocalPins();
+    let localComments = readLocalComments();
+    let pins = mergeLocalState([]); // 整个 projectKey 下所有页面的 pin
     let isCommentMode = false;
     let drawerOpen = false;
     let activePinId = null;
@@ -672,16 +827,12 @@
 
     // ============= 评论模式切换 =============
     function toggleCommentMode() {
-        if (!isCloudReady()) {
-            showToast('未连接 Supabase，多人评论不可用');
-            return;
-        }
         if (!isCommentMode) {
             ensureNickname(() => {
                 isCommentMode = true;
                 document.body.classList.add('pc-mode-on');
                 refreshFab();
-                showToast('评论模式：点击页面任意位置落 Pin');
+                showToast(isCloudReady() ? '评论模式：点击页面任意位置落 Pin' : '评论模式：当前将保存到本机');
             });
         } else {
             isCommentMode = false;
@@ -713,10 +864,6 @@
         if (e.target.closest('.pc-ui')) return;
         e.preventDefault();
         e.stopPropagation();
-        if (!isCloudReady()) {
-            showToast('未连接 Supabase，多人评论不可用');
-            return;
-        }
 
         const target = e.target;
         const rect = target.getBoundingClientRect();
@@ -879,10 +1026,17 @@
             send.disabled = true;
             let savedPin = null;
             try {
+                if (!isCloudReady()) throw new Error('Supabase is not connected');
                 savedPin = await insertPin(pin);
-                const msg = await insertComment(savedPin.id, v);
-                savedPin.comments.push(msg);
-                if (!pins.some(p => p.id === savedPin.id)) pins.push(savedPin);
+                try {
+                    const msg = await insertComment(savedPin.id, v);
+                    savedPin.comments.push(msg);
+                } catch (commentErr) {
+                    try { await deletePin(savedPin.id); } catch (cleanupErr) { console.warn('[pin-comments] cleanup draft pin failed', cleanupErr); }
+                    savedPin = null;
+                    throw commentErr;
+                }
+                pins = mergeLocalState(pins.filter(p => p.id !== savedPin.id).concat(savedPin));
                 closeActiveCard();
                 pinsHidden = false;
                 refreshAllUi();
@@ -891,9 +1045,13 @@
                 if (savedPin) {
                     try { await deletePin(savedPin.id); } catch (cleanupErr) { console.warn('[pin-comments] cleanup draft pin failed', cleanupErr); }
                 }
-                console.error('[pin-comments] create draft failed', err);
-                showToast('评论发送失败，请稍后重试');
-                send.disabled = false;
+                console.warn('[pin-comments] cloud draft failed, saved locally', err);
+                const localPin = saveLocalDraftPin(pin, v);
+                closeActiveCard();
+                pinsHidden = false;
+                refreshAllUi();
+                openCard(localPin.id);
+                showToast('评论已保存到本机');
             }
         };
         send.onclick = doSend;
@@ -994,6 +1152,7 @@
             if (!v) return;
             send.disabled = true;
             try {
+                if (!isCloudReady()) throw new Error('Supabase is not connected');
                 const msg = await insertComment(pin.id, v);
                 pin.comments.push(msg);
                 renderCard(card, pin);
@@ -1001,9 +1160,14 @@
                 const newTa = card.querySelector('textarea');
                 if (newTa) newTa.focus();
             } catch (err) {
-                console.error('[pin-comments] send comment failed', err);
-                showToast('评论发送失败，请稍后重试');
-                send.disabled = false;
+                console.warn('[pin-comments] cloud comment failed, saved locally', err);
+                const msg = saveLocalComment(pin.id, v);
+                const nextPin = pins.find(p => p.id === pin.id) || { ...pin, comments: pin.comments.concat(msg) };
+                renderCard(card, nextPin);
+                if (drawerOpen) renderDrawer();
+                const newTa = card.querySelector('textarea');
+                if (newTa) newTa.focus();
+                showToast('评论已保存到本机');
             }
         };
         send.onclick = doSend;
