@@ -1,0 +1,1326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:,">
+  <title>智慧作业数据看板 · 评审修订版 20260706</title>
+  <style>
+    :root {
+      --bg: #f3f6f7;
+      --ink: #18212b;
+      --muted: #64717f;
+      --panel: #ffffff;
+      --panel-soft: #eef3f4;
+      --line: #d7e0e4;
+      --line-strong: #a8b8c0;
+      --teal: #0c8787;
+      --green: #2d8065;
+      --amber: #bc7412;
+      --blue: #315ea8;
+      --red: #b5413c;
+      --violet: #7b579c;
+      --shadow: 0 18px 42px rgba(29, 45, 58, 0.1);
+      --radius: 8px;
+      --mono: "DIN Alternate", "Avenir Next Condensed", "Bahnschrift", "PingFang SC", "Microsoft YaHei", sans-serif;
+      --body: "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      min-width: 0;
+      background: var(--bg);
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(120deg, rgba(12, 135, 135, 0.08), transparent 28%),
+        linear-gradient(280deg, rgba(188, 116, 18, 0.08), transparent 32%),
+        var(--bg);
+      font-family: var(--body);
+    }
+
+    button,
+    select {
+      font: inherit;
+    }
+
+    .shell {
+      width: min(1480px, calc(100vw - 40px));
+      margin: 0 auto;
+      padding: 22px 0 42px;
+    }
+
+    .app-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 24px;
+      align-items: end;
+      padding: 12px 0 18px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--teal);
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font: 900 clamp(30px, 4vw, 56px)/1 var(--mono);
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin-top: 10px;
+      max-width: 880px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.65;
+      font-weight: 700;
+    }
+
+    .status-stack {
+      display: grid;
+      gap: 8px;
+      justify-items: end;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .badge,
+    .source-chip,
+    .event-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 5px 9px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.76);
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .badge[data-tone="live"],
+    .source-chip.live {
+      border-color: rgba(45, 128, 101, 0.32);
+      color: var(--green);
+      background: rgba(45, 128, 101, 0.09);
+    }
+
+    .badge[data-tone="delay"],
+    .source-chip.delay {
+      border-color: rgba(188, 116, 18, 0.36);
+      color: var(--amber);
+      background: rgba(188, 116, 18, 0.1);
+    }
+
+    .badge[data-tone="stop"] {
+      border-color: rgba(181, 65, 60, 0.28);
+      color: var(--red);
+      background: rgba(181, 65, 60, 0.08);
+    }
+
+    .tabbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      gap: 8px;
+      padding: 10px 0;
+      background: rgba(243, 246, 247, 0.9);
+      backdrop-filter: blur(16px);
+    }
+
+    .tabbar button {
+      min-height: 38px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.72);
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .tabbar button[aria-selected="true"] {
+      color: #ffffff;
+      border-color: var(--ink);
+      background: var(--ink);
+      box-shadow: var(--shadow);
+    }
+
+    .global-band,
+    .view-header,
+    .filter-strip,
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.86);
+      box-shadow: var(--shadow);
+    }
+
+    .global-band {
+      display: grid;
+      grid-template-columns: minmax(260px, 1.1fr) minmax(260px, 1fr) minmax(260px, 1fr);
+      gap: 1px;
+      overflow: hidden;
+      background: var(--line);
+      box-shadow: none;
+    }
+
+    .global-card {
+      min-width: 0;
+      padding: 16px;
+      background: #fff;
+    }
+
+    .global-card h2,
+    .panel h2,
+    .source-card h3 {
+      color: var(--ink);
+      font-size: 16px;
+      line-height: 1.25;
+      font-weight: 950;
+    }
+
+    .global-card p,
+    .rule-list,
+    .panel-note,
+    .source-card p {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+      font-weight: 750;
+    }
+
+    .rule-list {
+      display: grid;
+      gap: 6px;
+      padding: 0;
+      list-style: none;
+    }
+
+    .rule-list li {
+      display: grid;
+      grid-template-columns: 7px minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+    }
+
+    .rule-list li::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      margin-top: 7px;
+      border-radius: 50%;
+      background: var(--teal);
+    }
+
+    .dashboard-view {
+      margin-top: 16px;
+    }
+
+    .dashboard-view[hidden] {
+      display: none;
+    }
+
+    .view-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: start;
+      padding: 18px;
+      overflow: hidden;
+    }
+
+    .view-title {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .view-title h2 {
+      font: 950 clamp(24px, 3vw, 38px)/1.05 var(--mono);
+      letter-spacing: 0;
+    }
+
+    .view-summary {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+      font-weight: 760;
+    }
+
+    .filter-strip {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(132px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+      padding: 12px;
+      box-shadow: none;
+    }
+
+    .filter-field {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .filter-field label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 950;
+    }
+
+    .filter-field select,
+    .filter-field .readonly {
+      width: 100%;
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 0 10px;
+      color: var(--ink);
+      background: #fff;
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .readonly {
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .filter-message {
+      grid-column: 1 / -1;
+      display: none;
+      padding: 10px 12px;
+      border: 1px dashed rgba(188, 116, 18, 0.48);
+      border-radius: var(--radius);
+      color: var(--amber);
+      background: rgba(188, 116, 18, 0.08);
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .filter-message.is-visible {
+      display: block;
+    }
+
+    .metrics-row {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .metric {
+      min-width: 0;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+
+    .metric b {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      color: var(--ink);
+      font: 950 30px/1 var(--mono);
+      white-space: nowrap;
+    }
+
+    .metric small {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+      font-weight: 850;
+    }
+
+    .metric em {
+      display: block;
+      margin-top: 9px;
+      color: var(--teal);
+      font-style: normal;
+      font-size: 12px;
+      font-weight: 950;
+    }
+
+    .grid-3,
+    .grid-2,
+    .grid-main {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .grid-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .grid-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid-main {
+      grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.8fr);
+    }
+
+    .panel {
+      min-width: 0;
+      padding: 16px;
+      box-shadow: none;
+    }
+
+    .panel-head {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .panel-head .source-chip {
+      flex: 0 0 auto;
+    }
+
+    .chart-card {
+      min-height: 260px;
+    }
+
+    .bars {
+      display: flex;
+      align-items: end;
+      gap: 5px;
+      min-height: 158px;
+      padding: 16px 4px 22px;
+      border-bottom: 1px solid var(--line);
+      background:
+        linear-gradient(to top, rgba(24, 33, 43, 0.06) 1px, transparent 1px);
+      background-size: 100% 34px;
+    }
+
+    .bars i {
+      position: relative;
+      flex: 1 1 0;
+      min-width: 5px;
+      height: var(--h);
+      border-radius: 4px 4px 0 0;
+      background: var(--tone, var(--teal));
+      box-shadow: 0 8px 18px rgba(24, 33, 43, 0.12);
+    }
+
+    .bars i::after {
+      content: attr(data-label);
+      position: absolute;
+      left: 50%;
+      bottom: -18px;
+      color: var(--muted);
+      font: 850 10px/1 var(--mono);
+      transform: translateX(-50%);
+      white-space: nowrap;
+    }
+
+    .legend-row,
+    .event-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-top: 12px;
+    }
+
+    .legend-row span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .event-chip {
+      background: var(--panel-soft);
+    }
+
+    .school-table,
+    .unit-table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: var(--radius);
+      font-size: 13px;
+    }
+
+    .school-table th,
+    .school-table td,
+    .unit-table th,
+    .unit-table td {
+      padding: 11px 10px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .school-table th,
+    .unit-table th {
+      color: var(--muted);
+      background: var(--panel-soft);
+      font-size: 11px;
+      font-weight: 950;
+    }
+
+    .school-table td,
+    .unit-table td {
+      color: var(--ink);
+      font-weight: 800;
+    }
+
+    .action-link {
+      min-height: 30px;
+      border: 1px solid rgba(12, 135, 135, 0.35);
+      border-radius: var(--radius);
+      color: var(--teal);
+      background: rgba(12, 135, 135, 0.08);
+      font-weight: 950;
+      cursor: pointer;
+    }
+
+    .policy-card {
+      display: grid;
+      gap: 10px;
+    }
+
+    .policy-row {
+      display: grid;
+      grid-template-columns: 92px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+    }
+
+    .policy-row b {
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 950;
+    }
+
+    .policy-row span {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      font-weight: 760;
+    }
+
+    .source-board {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .source-card {
+      min-width: 0;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+    }
+
+    .source-card figure {
+      margin: 12px 0 0;
+    }
+
+    .source-card img,
+    .mock-shot {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-soft);
+    }
+
+    .source-card figcaption {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      font-weight: 760;
+    }
+
+    .mock-shot {
+      display: grid;
+      grid-template-rows: 34px 1fr;
+      overflow: hidden;
+    }
+
+    .mock-top {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--line);
+      background: #26313b;
+    }
+
+    .mock-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--amber);
+    }
+
+    .mock-top b {
+      color: #ffffff;
+      font-size: 12px;
+    }
+
+    .mock-body {
+      display: grid;
+      grid-template-columns: 90px 1fr;
+      min-height: 0;
+      background: #f8fafb;
+    }
+
+    .mock-side {
+      padding: 10px;
+      background: #e5ebef;
+    }
+
+    .mock-side span,
+    .mock-table span {
+      display: block;
+      height: 10px;
+      margin-bottom: 10px;
+      border-radius: 5px;
+      background: #aebdc7;
+    }
+
+    .mock-table {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+    }
+
+    .mock-table span {
+      height: 16px;
+      margin: 0;
+      background: linear-gradient(90deg, #7fb1b2, #d8e1e4);
+    }
+
+    .heatmap {
+      display: grid;
+      grid-template-columns: 70px repeat(5, minmax(52px, 1fr));
+      gap: 6px;
+      align-items: stretch;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+    .heat-label,
+    .heat-cell {
+      min-height: 42px;
+      border-radius: var(--radius);
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .heat-label {
+      color: var(--muted);
+      background: var(--panel-soft);
+    }
+
+    .heat-cell {
+      border: 1px solid transparent;
+      color: #fff;
+      background: color-mix(in srgb, var(--tone) var(--mix, 78%), #ffffff);
+    }
+
+    .teacher-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .teacher-row {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+    }
+
+    .teacher-row b {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      color: #fff;
+      background: var(--tone, var(--teal));
+      font: 950 13px/1 var(--mono);
+    }
+
+    .teacher-row span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 900;
+    }
+
+    .teacher-row em {
+      color: var(--tone, var(--teal));
+      font-style: normal;
+      font-size: 12px;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .diagnosis {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .diagnosis-item {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+    }
+
+    .diagnosis-item b {
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 950;
+    }
+
+    .diagnosis-item span {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+      font-weight: 760;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 8px;
+    }
+
+    .timeline p {
+      display: grid;
+      grid-template-columns: 52px minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .timeline b {
+      color: var(--ink);
+      font-family: var(--mono);
+    }
+
+    .timeline em {
+      color: var(--teal);
+      font-style: normal;
+      font-weight: 950;
+    }
+
+    @media (max-width: 1180px) {
+      .app-header,
+      .view-header,
+      .grid-main,
+      .grid-3,
+      .grid-2,
+      .global-band,
+      .source-board {
+        grid-template-columns: 1fr;
+      }
+
+      .status-stack {
+        justify-items: start;
+      }
+
+      .badge-row {
+        justify-content: flex-start;
+      }
+
+      .metrics-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .diagnosis {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 720px) {
+      .shell {
+        width: min(100vw - 24px, 1480px);
+        padding-top: 12px;
+      }
+
+      .tabbar {
+        overflow-x: auto;
+      }
+
+      .tabbar button {
+        flex: 0 0 auto;
+      }
+
+      .filter-strip,
+      .metrics-row,
+      .diagnosis {
+        grid-template-columns: 1fr;
+      }
+
+      .view-header {
+        padding: 14px;
+      }
+
+      .metric b {
+        font-size: 25px;
+      }
+
+      .timeline p {
+        grid-template-columns: 44px minmax(0, 1fr);
+      }
+
+      .timeline em {
+        grid-column: 2;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">评审修订稿 · 2026.07.06 · 新增文件，不覆盖原 HTML</p>
+        <h1>智慧作业数据看板</h1>
+        <p class="subtitle">本版把评审建议落到界面规则中：frog 指标 T+1 计算、frog 轮动明细按 T-1 快照、落库数据实时；商品和合约进入权限范围；暂不跳回飞象作业内部。</p>
+      </div>
+      <div class="status-stack" aria-label="全局状态">
+        <div class="badge-row">
+          <span class="badge" data-tone="delay">frog 指标 T+1</span>
+          <span class="badge" data-tone="delay">frog 轮动 T-1</span>
+          <span class="badge" data-tone="live">落库实时</span>
+          <span class="badge" data-tone="stop">去掉内部跳转</span>
+        </div>
+      </div>
+    </header>
+
+    <nav class="tabbar" role="tablist" aria-label="看板切换">
+      <button type="button" role="tab" aria-selected="true" aria-controls="region-homework" data-tab="region-homework">区域作业看板</button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="school-homework" data-tab="school-homework">单校作业看板</button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="region-research" data-tab="region-research">区域教研看板</button>
+    </nav>
+
+    <section class="global-band" aria-label="全局修订规则">
+      <article class="global-card">
+        <h2>数据时效</h2>
+        <ul class="rule-list">
+          <li>frog 侧指标只能 T+1 计算，不能标记为实时。</li>
+          <li>frog 轮动明细按 T-1 快照展示，文案统一写“昨日快照”。</li>
+          <li>已落库的作业、提交、批改等明细可实时读取。</li>
+        </ul>
+      </article>
+      <article class="global-card">
+        <h2>权限范围</h2>
+        <ul class="rule-list">
+          <li>区域、学校管理员权限继续生效。</li>
+          <li>新增商品权限：只展示用户有权查看的商品数据。</li>
+          <li>新增合约权限：按合约覆盖学校、学段和功能模块过滤。</li>
+        </ul>
+      </article>
+      <article class="global-card">
+        <h2>交互边界</h2>
+        <ul class="rule-list">
+          <li>暂不跳转飞象作业内部页面。</li>
+          <li>区域到单校只传递筛选上下文，不做外链跳转。</li>
+          <li>环比先移除；后续如恢复，必须显式配置对比日期范围。</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="source-board" aria-label="数据口径截图示意">
+      <article class="source-card">
+        <h3>frog 取数页截图示意</h3>
+        <p>用于补齐 frog 来源页面。正式评审时替换为实际 frog 页面截图，并标注字段：学校、班级、作业、提交、批改、AI 功能事件。</p>
+        <figure>
+          <div class="mock-shot" role="img" aria-label="frog 数据页截图示意">
+            <div class="mock-top"><span class="mock-dot"></span><b>frog 数据任务 · T+1 计算</b></div>
+            <div class="mock-body">
+              <div class="mock-side"><span></span><span></span><span></span><span></span></div>
+              <div class="mock-table"><span></span><span></span><span></span><span></span><span></span></div>
+            </div>
+          </div>
+          <figcaption>截图需落到“数据口径说明”中，避免误解为实时。</figcaption>
+        </figure>
+      </article>
+      <article class="source-card">
+        <h3>现有学情页截图示意</h3>
+        <p>用于说明班级、学科、提交、批改等落库数据从现有页面取数，支持实时读取。</p>
+        <figure>
+          <img src="images/class-xueqing.png" alt="班级学情页面截图示意">
+          <figcaption>现有数据截图：班级学情。</figcaption>
+        </figure>
+      </article>
+      <article class="source-card">
+        <h3>单校热力明细截图示意</h3>
+        <p>用于对应区域下钻到单校后的班级学科明细，展示筛选上下文、学校和学科口径。</p>
+        <figure>
+          <img src="images/chaoyang-school-heatmap-detail.png" alt="单校热力明细截图示意">
+          <figcaption>现有数据截图：学校热力明细。</figcaption>
+        </figure>
+      </article>
+    </section>
+
+    <main>
+      <section class="dashboard-view" id="region-homework" role="tabpanel">
+        <header class="view-header">
+          <div>
+            <div class="view-title">
+              <h2>区域作业看板</h2>
+              <span class="badge" data-tone="delay">frog 非实时</span>
+              <span class="badge" data-tone="live">落库实时</span>
+            </div>
+            <p class="view-summary">区域页默认先选学年，再在学年内选择学期和日期。寒暑假未配置时不进入统计，AI 龙老师能力只在学年内开放。</p>
+          </div>
+          <div class="badge-row">
+            <span class="badge">商品：智慧作业</span>
+            <span class="badge">合约：朝阳区 2026</span>
+          </div>
+        </header>
+
+        <section class="filter-strip" aria-label="区域作业筛选">
+          <div class="filter-field">
+            <label for="regionYear">学年</label>
+            <select id="regionYear" data-year-select>
+              <option>2025-2026 学年</option>
+              <option>2026-2027 学年</option>
+            </select>
+          </div>
+          <div class="filter-field">
+            <label for="regionTerm">学期</label>
+            <select id="regionTerm" data-term-select>
+              <option value="spring">第二学期</option>
+              <option value="fall">第一学期</option>
+              <option value="holiday">寒暑假未配置</option>
+            </select>
+          </div>
+          <div class="filter-field">
+            <label>日期范围</label>
+            <div class="readonly" data-date-context>2026.03.01 至 2026.06.30</div>
+          </div>
+          <div class="filter-field">
+            <label>商品权限</label>
+            <div class="readonly">智慧作业 · AI 龙老师</div>
+          </div>
+          <div class="filter-field">
+            <label>合约权限</label>
+            <div class="readonly">朝阳区教育局合约内学校</div>
+          </div>
+          <div class="filter-field">
+            <label>下钻逻辑</label>
+            <div class="readonly">仅带入筛选，不跳外部</div>
+          </div>
+          <div class="filter-message" data-holiday-message>当前寒暑假未配置，不展示统计数据；如需开放假期，需要先补充学年内假期配置。</div>
+        </section>
+
+        <section class="metrics-row" aria-label="区域作业核心指标">
+          <article class="metric"><b>1,284<small>位</small></b><span>使用老师数</span><em>落库实时</em></article>
+          <article class="metric"><b>42,915<small>位</small></b><span>使用学生数</span><em>落库实时</em></article>
+          <article class="metric"><b>18,732<small>份</small></b><span>老师作业数</span><em>落库实时</em></article>
+          <article class="metric"><b>1,906,248<small>次</small></b><span>作业提交人次</span><em>落库实时</em></article>
+          <article class="metric"><b>14.6<small>份/人</small></b><span>老师人均作业数</span><em>不展示环比</em></article>
+        </section>
+
+        <div class="grid-main">
+          <section class="panel chart-card">
+            <div class="panel-head">
+              <h2>每日使用人数</h2>
+              <span class="source-chip live">落库实时</span>
+            </div>
+            <div class="bars" aria-label="每日使用人数趋势，日期多时按周聚合">
+              <i style="--h:52%;--tone:var(--teal)" data-label="03.01"></i>
+              <i style="--h:58%;--tone:var(--teal)" data-label="03.08"></i>
+              <i style="--h:63%;--tone:var(--teal)" data-label="03.15"></i>
+              <i style="--h:67%;--tone:var(--teal)" data-label="03.22"></i>
+              <i style="--h:74%;--tone:var(--teal)" data-label="03.29"></i>
+              <i style="--h:71%;--tone:var(--teal)" data-label="04.05"></i>
+              <i style="--h:79%;--tone:var(--blue)" data-label="04.12"></i>
+              <i style="--h:83%;--tone:var(--blue)" data-label="04.19"></i>
+              <i style="--h:86%;--tone:var(--blue)" data-label="04.26"></i>
+              <i style="--h:76%;--tone:var(--amber)" data-label="05.03"></i>
+              <i style="--h:88%;--tone:var(--blue)" data-label="05.10"></i>
+              <i style="--h:91%;--tone:var(--green)" data-label="05.17"></i>
+            </div>
+            <div class="legend-row">
+              <span>31 天内按日展示</span>
+              <span>31-180 天按周聚合</span>
+              <span>超过 180 天按月聚合</span>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>日期与对比规则</h2>
+              <span class="source-chip delay">口径补齐</span>
+            </div>
+            <div class="policy-card">
+              <div class="policy-row"><b>先选学年</b><span>学期、日期、AI 龙老师能力都受学年边界约束。</span></div>
+              <div class="policy-row"><b>寒暑假</b><span>未配置时显示空态，不默认沿用学期统计。</span></div>
+              <div class="policy-row"><b>环比</b><span>本版移除。后续恢复时需显式选择对比日期，日期不足则不展示。</span></div>
+              <div class="policy-row"><b>下钻</b><span>学校名点击只进入本 HTML 的单校看板，并带入当前学年、日期、商品和合约。</span></div>
+            </div>
+          </section>
+        </div>
+
+        <div class="grid-2">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>学校使用概览</h2>
+              <span class="source-chip live">落库实时</span>
+            </div>
+            <table class="school-table">
+              <thead>
+                <tr><th>学校</th><th>使用学生数</th><th>老师作业数</th><th>操作</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>北京市第八十中学</td><td>1,932</td><td>418</td><td><button class="action-link" type="button" data-drill-school="北京市第八十中学">带筛选下钻</button></td></tr>
+                <tr><td>花家地实验小学</td><td>1,284</td><td>336</td><td><button class="action-link" type="button" data-drill-school="花家地实验小学">带筛选下钻</button></td></tr>
+                <tr><td>陈经纶中学分校</td><td>1,568</td><td>392</td><td><button class="action-link" type="button" data-drill-school="陈经纶中学分校">带筛选下钻</button></td></tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>轮动数据</h2>
+              <span class="source-chip delay">frog T-1 快照</span>
+            </div>
+            <p class="panel-note">事件类型精简为四类，避免暴露过多不可实时取的 frog 明细。</p>
+            <div class="event-chips">
+              <span class="event-chip">发布作业</span>
+              <span class="event-chip">提交作业</span>
+              <span class="event-chip">批改完成</span>
+              <span class="event-chip">AI 功能使用</span>
+            </div>
+            <div class="timeline" style="margin-top:12px">
+              <p><b>T-1</b><span>八十中学新增作业 42 份</span><em>发布作业</em></p>
+              <p><b>T-1</b><span>花家地实验小学提交 1,028 人次</span><em>提交作业</em></p>
+              <p><b>T-1</b><span>陈经纶中学分校 AI 讲题 326 次</span><em>AI 功能使用</em></p>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="dashboard-view" id="school-homework" role="tabpanel" hidden>
+        <header class="view-header">
+          <div>
+            <div class="view-title">
+              <h2><span data-school-name>北京市第八十中学</span> · 单校作业看板</h2>
+              <span class="badge" data-tone="live">落库实时</span>
+              <span class="badge" data-tone="delay">frog 非实时</span>
+            </div>
+            <p class="view-summary" id="singleSchoolContext">继承区域筛选：2025-2026 学年，2026.03.01 至 2026.06.30，商品智慧作业，合约朝阳区 2026。</p>
+          </div>
+          <div class="badge-row">
+            <span class="badge">不展示环比</span>
+            <span class="badge">不跳飞象内部</span>
+          </div>
+        </header>
+
+        <section class="metrics-row" aria-label="单校核心指标">
+          <article class="metric"><b>86<small>位</small></b><span>使用老师数</span><em>落库实时</em></article>
+          <article class="metric"><b>1,932<small>位</small></b><span>使用学生数</span><em>落库实时</em></article>
+          <article class="metric"><b>418<small>份</small></b><span>老师作业数</span><em>落库实时</em></article>
+          <article class="metric"><b>42,816<small>次</small></b><span>作业提交人次</span><em>落库实时</em></article>
+          <article class="metric"><b>4.9<small>份/人</small></b><span>老师人均作业数</span><em>不展示环比</em></article>
+        </section>
+
+        <div class="grid-main">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>班级学科作业热力图</h2>
+              <span class="source-chip live">不展示正确率</span>
+            </div>
+            <div class="heatmap" aria-label="班级学科作业热力图">
+              <div class="heat-label">班级</div><div class="heat-label">数学</div><div class="heat-label">英语</div><div class="heat-label">物理</div><div class="heat-label">化学</div><div class="heat-label">生物</div>
+              <div class="heat-label">七(1)</div><div class="heat-cell" style="--tone:var(--green);--mix:78%">36</div><div class="heat-cell" style="--tone:var(--teal);--mix:70%">24</div><div class="heat-cell" style="--tone:var(--amber);--mix:62%">18</div><div class="heat-cell" style="--tone:var(--green);--mix:58%">20</div><div class="heat-cell" style="--tone:var(--blue);--mix:50%">12</div>
+              <div class="heat-label">七(2)</div><div class="heat-cell" style="--tone:var(--amber);--mix:68%">25</div><div class="heat-cell" style="--tone:var(--amber);--mix:72%">31</div><div class="heat-cell" style="--tone:var(--green);--mix:54%">17</div><div class="heat-cell" style="--tone:var(--teal);--mix:58%">19</div><div class="heat-cell" style="--tone:var(--blue);--mix:44%">8</div>
+              <div class="heat-label">八(1)</div><div class="heat-cell" style="--tone:var(--red);--mix:80%">42</div><div class="heat-cell" style="--tone:var(--amber);--mix:64%">23</div><div class="heat-cell" style="--tone:var(--amber);--mix:70%">28</div><div class="heat-cell" style="--tone:var(--green);--mix:50%">16</div><div class="heat-cell" style="--tone:var(--blue);--mix:48%">10</div>
+              <div class="heat-label">九(1)</div><div class="heat-cell" style="--tone:var(--amber);--mix:76%">34</div><div class="heat-cell" style="--tone:var(--green);--mix:58%">21</div><div class="heat-cell" style="--tone:var(--red);--mix:76%">38</div><div class="heat-cell" style="--tone:var(--amber);--mix:48%">14</div><div class="heat-cell" style="--tone:var(--teal);--mix:52%">13</div>
+            </div>
+            <p class="panel-note">单元格只展示班级、学科、作业数、班级平均提交率、班级平均批改率；不展示正确率。学科逻辑：小学展示数学、英语、语文、科学、体育；初高中展示数学、英语、物理、语文、化学、生物，按学校开设学科过滤。</p>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>需关注教师</h2>
+              <span class="source-chip live">班级口径</span>
+            </div>
+            <div class="teacher-list">
+              <div class="teacher-row" style="--tone:var(--red)"><b>1</b><span>赵明 · 八(1)数学</span><em>班级平均提交率 30.5%</em></div>
+              <div class="teacher-row" style="--tone:var(--amber)"><b>2</b><span>周磊 · 九(1)物理</span><em>班级平均批改率 74.0%</em></div>
+              <div class="teacher-row" style="--tone:var(--violet)"><b>3</b><span>孙浩 · 七(2)英语</span><em>班级平均正确率 61.5%</em></div>
+              <div class="teacher-row" style="--tone:var(--muted)"><b>4</b><span>吴倩 · 八(2)化学</span><em>老师作业数 3 份</em></div>
+            </div>
+            <p class="panel-note">文案统一补“班级”：班级平均提交率、班级平均批改率、班级平均正确率。点击教师只定位本页线索，不跳飞象作业内部。</p>
+          </section>
+        </div>
+
+        <div class="grid-2">
+          <section class="panel chart-card">
+            <div class="panel-head">
+              <h2>每日作业数</h2>
+              <span class="source-chip live">落库实时</span>
+            </div>
+            <div class="bars">
+              <i style="--h:45%;--tone:var(--amber)" data-label="03.01"></i>
+              <i style="--h:58%;--tone:var(--amber)" data-label="03.08"></i>
+              <i style="--h:61%;--tone:var(--amber)" data-label="03.15"></i>
+              <i style="--h:70%;--tone:var(--blue)" data-label="03.22"></i>
+              <i style="--h:76%;--tone:var(--blue)" data-label="03.29"></i>
+              <i style="--h:84%;--tone:var(--green)" data-label="04.05"></i>
+              <i style="--h:79%;--tone:var(--green)" data-label="04.12"></i>
+              <i style="--h:90%;--tone:var(--teal)" data-label="04.19"></i>
+            </div>
+            <p class="panel-note">从区域下钻时沿用日期范围；若用户单独调整日期，也只影响本单校页。</p>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>动态事件</h2>
+              <span class="source-chip delay">frog 不实时</span>
+            </div>
+            <p class="panel-note">单校动态同样精简为四类；来自 frog 的事件标注为昨日快照，来自落库的事件可显示实时。</p>
+            <div class="timeline" style="margin-top:12px">
+              <p><b>实时</b><span>赵明老师发布八(1)数学作业 42 份</span><em>落库</em></p>
+              <p><b>T-1</b><span>学生使用 AI 讲题 184 次</span><em>frog</em></p>
+              <p><b>实时</b><span>周磊老师完成九(1)物理批改</span><em>落库</em></p>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="dashboard-view" id="region-research" role="tabpanel" hidden>
+        <header class="view-header">
+          <div>
+            <div class="view-title">
+              <h2>区域教研看板</h2>
+              <span class="badge" data-tone="delay">数据非实时</span>
+              <span class="badge">仅理科筛选</span>
+            </div>
+            <p class="view-summary">教研看板使用非实时统计，筛选项带入单校教研页；单元只展示有知识点的单元，质量诊断明确为单元维度、区域汇总口径。</p>
+          </div>
+          <div class="badge-row">
+            <span class="badge">环比已移除</span>
+            <span class="badge">教材配置校验</span>
+          </div>
+        </header>
+
+        <section class="filter-strip" aria-label="区域教研筛选">
+          <div class="filter-field">
+            <label for="researchRegion">区域</label>
+            <select id="researchRegion">
+              <option>朝阳区</option>
+              <option>海淀区</option>
+            </select>
+          </div>
+          <div class="filter-field">
+            <label for="researchSubject">学科</label>
+            <select id="researchSubject">
+              <option>数学</option>
+              <option>物理</option>
+              <option>化学</option>
+              <option>生物</option>
+            </select>
+          </div>
+          <div class="filter-field">
+            <label>学年</label>
+            <div class="readonly">2025-2026 学年</div>
+          </div>
+          <div class="filter-field">
+            <label>教材版本</label>
+            <div class="readonly">区域配置优先</div>
+          </div>
+          <div class="filter-field">
+            <label>下钻</label>
+            <div class="readonly">区域筛选带入单校</div>
+          </div>
+          <div class="filter-field">
+            <label>时效</label>
+            <div class="readonly">T+1 统计</div>
+          </div>
+        </section>
+
+        <section class="metrics-row" aria-label="区域教研核心指标">
+          <article class="metric"><b>126<small>个</small></b><span>有知识点单元</span><em>仅展示有知识点</em></article>
+          <article class="metric"><b>3,428<small>条</small></b><span>知识点诊断记录</span><em>frog T+1</em></article>
+          <article class="metric"><b>86.4<small>%</small></b><span>单元完成覆盖率</span><em>区域汇总</em></article>
+          <article class="metric"><b>24<small>所</small></b><span>教材不一致学校</span><em>需校验</em></article>
+          <article class="metric"><b>91.2<small>%</small></b><span>区本练习册匹配率</span><em>展示置信状态</em></article>
+        </section>
+
+        <div class="grid-2">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>单元与知识点</h2>
+              <span class="source-chip delay">非实时</span>
+            </div>
+            <table class="unit-table">
+              <thead>
+                <tr><th>单元</th><th>知识点数</th><th>诊断范围</th><th>展示规则</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>一次函数</td><td>12</td><td>全区学校汇总</td><td>展示</td></tr>
+                <tr><td>平行四边形</td><td>9</td><td>全区学校汇总</td><td>展示</td></tr>
+                <tr><td>统计初步</td><td>0</td><td>无知识点</td><td>不展示</td></tr>
+              </tbody>
+            </table>
+            <p class="panel-note">单元列表过滤掉无知识点单元，避免教研页出现空诊断。</p>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>教材配置不一致处理</h2>
+              <span class="source-chip delay">规则补齐</span>
+            </div>
+            <div class="policy-card">
+              <div class="policy-row"><b>区域配置</b><span>区域教研默认按区域教材版本汇总，保证同屏可比。</span></div>
+              <div class="policy-row"><b>单校配置</b><span>下钻到单校时保留学校自己的教材版本，并在页头标注差异。</span></div>
+              <div class="policy-row"><b>冲突状态</b><span>区域与单校不一致时显示“教材不一致”，质量诊断不混算。</span></div>
+            </div>
+          </section>
+        </div>
+
+        <section class="panel" style="margin-top:10px">
+          <div class="panel-head">
+            <h2>质量诊断口径</h2>
+            <span class="source-chip delay">范围说清楚</span>
+          </div>
+          <div class="diagnosis">
+            <div class="diagnosis-item"><b>计算对象</b><span>按单元计算，不按整本教材直接汇总。</span></div>
+            <div class="diagnosis-item"><b>统计范围</b><span>区域页展示全区学校汇总；单校页展示本校结果。</span></div>
+            <div class="diagnosis-item"><b>区本练习册</b><span>展示数据匹配率和低置信标识，待数据侧二次校验。</span></div>
+            <div class="diagnosis-item"><b>下钻继承</b><span>区域、学科、学年、教材版本带入单校，不新增外部跳转。</span></div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const tabs = Array.from(document.querySelectorAll('[data-tab]'));
+    const panels = Array.from(document.querySelectorAll('.dashboard-view'));
+    const schoolName = document.querySelector('[data-school-name]');
+    const singleSchoolContext = document.getElementById('singleSchoolContext');
+    const yearSelects = Array.from(document.querySelectorAll('[data-year-select]'));
+    const termSelects = Array.from(document.querySelectorAll('[data-term-select]'));
+    const holidayMessages = Array.from(document.querySelectorAll('[data-holiday-message]'));
+    const dateContexts = Array.from(document.querySelectorAll('[data-date-context]'));
+
+    function activateTab(id) {
+      tabs.forEach((tab) => {
+        const isActive = tab.dataset.tab === id;
+        tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+      panels.forEach((panel) => {
+        panel.hidden = panel.id !== id;
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function currentYear() {
+      return yearSelects[0] ? yearSelects[0].value : '2025-2026 学年';
+    }
+
+    function currentDateRange() {
+      return dateContexts[0] ? dateContexts[0].textContent.trim() : '2026.03.01 至 2026.06.30';
+    }
+
+    function syncTermState() {
+      const isHoliday = termSelects.some((select) => select.value === 'holiday');
+      holidayMessages.forEach((message) => message.classList.toggle('is-visible', isHoliday));
+      dateContexts.forEach((context) => {
+        context.textContent = isHoliday ? '寒暑假未配置，暂无统计' : '2026.03.01 至 2026.06.30';
+      });
+    }
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => activateTab(tab.dataset.tab));
+    });
+
+    termSelects.forEach((select) => {
+      select.addEventListener('change', syncTermState);
+    });
+
+    document.querySelectorAll('[data-drill-school]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const name = button.dataset.drillSchool;
+        if (schoolName) schoolName.textContent = name;
+        if (singleSchoolContext) {
+          singleSchoolContext.textContent = `继承区域筛选：${currentYear()}，${currentDateRange()}，商品智慧作业，合约朝阳区 2026。`;
+        }
+        activateTab('school-homework');
+      });
+    });
+
+    syncTermState();
+  </script>
+</body>
+</html>
